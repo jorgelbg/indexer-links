@@ -15,13 +15,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-<project name="microformats-reltag" default="jar-core">
+<project name="links-extractor" default="jar-core">
 
-  <import file="../build-plugin.xml"/>
-
-  <!-- Deploy Unit test dependencies -->
-  <target name="deps-test">
-    <ant target="deploy" inheritall="false" dir="../nutch-extensionpoints"/>
-  </target>
+    <import file="../build-plugin.xml"/>
 
 </project>
