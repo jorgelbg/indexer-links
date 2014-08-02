@@ -16,7 +16,6 @@
  */
 package org.apache.nutch.orion.links;
 
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 
@@ -33,7 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Iterator;
+import java.util.*;
 
 /**
  * An {@link org.apache.nutch.indexer.IndexingFilter} that adds
@@ -46,17 +45,29 @@ import java.util.Iterator;
  * <name>outlinks.host.ignore</name>
  * <value>false</value>
  * </property>
+ * <p/>
+ * The same checks are done for inlinks, and the same assumption is done, only add those inlinks which
+ * host portion is different than the host of the URL.
+ * <p/>
+ * <property>
+ * <name>inlinks.host.ignore</name>
+ * <value>false</value>
+ * </property>
  *
  * @author Jorge Luis Betancourt González <betancourt.jorge@gmail.com>
  */
 public class LinksIndexingFilter implements IndexingFilter {
 
     public final static String LINKS_OUTLINKS_HOST = "outlinks.host.ignore";
+    public final static String LINKS_INLINKS_HOST = "inlinks.host.ignore";
+    public final static String LINKS_ONLY_HOSTS = "links.hosts.only";
 
     public final static org.slf4j.Logger LOG = LoggerFactory.getLogger(LinksIndexingFilter.class);
 
     private Configuration conf;
     private boolean filterOutlinks;
+    private boolean filterInlinks;
+    private boolean indexHost;
 
     // Inherited JavaDoc
     @Override
@@ -66,32 +77,90 @@ public class LinksIndexingFilter implements IndexingFilter {
         // Add the outlinks
         Outlink[] outlinks = parse.getData().getOutlinks();
 
+        if (indexHost) {
+            Set<Outlink> set = new HashSet<Outlink>();
+            // This workaround is needed as the Set class is unable of differentiate Outlink objects
+            Set<String> hosts = new TreeSet<String>();
+
+            for (Outlink outlink : outlinks) {
+                try {
+                    String host = new URL(outlink.getToUrl()).getHost();
+                    if (!hosts.contains(host)) {
+                        hosts.add(host);
+                        Outlink link = new Outlink(host, outlink.getAnchor());
+                        set.add(link);
+                    }
+                } catch (MalformedURLException e) {
+                    LOG.error("Malformed URL in " + url + ":" + e.getMessage());
+                }
+            }
+
+            set.toArray(outlinks);
+        }
+
         try {
-            String host = new URL(url.toString()).getHost();
-
             if (outlinks != null) {
-                for (int i = 0; i < outlinks.length; i++) {
-                    String outHost = new URL(outlinks[i].getToUrl()).getHost();
-
+                for (Outlink outlink : outlinks) {
                     if (filterOutlinks) {
+                        String host = new URL(url.toString()).getHost();
+                        String outHost = outlink.getToUrl();
+
+                        if (!indexHost) {
+                            outHost = new URL(outlink.getToUrl()).getHost();
+                        }
+
                         if (!host.equalsIgnoreCase(outHost)) {
-                            doc.add("outlinks", outlinks[i].getToUrl());
+                            doc.add("outlinks", outlink.getToUrl());
                         }
                     } else {
-                        doc.add("outlinks", outlinks[i].getToUrl());
+                        doc.add("outlinks", outlink.getToUrl());
                     }
                 }
             }
         } catch (MalformedURLException ex) {
-            LOG.error("Malformed URL in " + url + ":" + ex.getMessage());
+            LOG.error("Malformed URL in " + url + ": " + ex.getMessage());
         }
-
+        
         // Add the inlinks, that comes from the reduce portion of the
         // indexing filter
         if (null != inlinks) {
             Iterator<Inlink> iterator = inlinks.iterator();
+            Set<String> inlinkHosts = new HashSet<String>();
+
             while (iterator.hasNext()) {
-                doc.add("inlinks", iterator.next().getFromUrl());
+                Inlink link = iterator.next();
+                String linkUrl = link.getFromUrl();
+
+                if (indexHost) {
+                    try {
+                        linkUrl = new URL(link.getFromUrl()).getHost();
+
+                        if (inlinkHosts.contains(linkUrl)) continue;
+
+                        inlinkHosts.add(linkUrl);
+                    } catch (MalformedURLException e) {
+                        LOG.error("Malformed URL in " + url + ":" + e.getMessage());
+                    }
+                }
+
+                try {
+                    if (filterInlinks) {
+                        String host = new URL(url.toString()).getHost();
+                        String inHost = linkUrl;
+
+                        if (!indexHost) {
+                            inHost = new URL(link.getFromUrl()).getHost();
+                        }
+
+                        if (!host.equalsIgnoreCase(inHost)) {
+                            doc.add("inlinks", linkUrl);
+                        }
+                    } else {
+                        doc.add("inlinks", linkUrl);
+                    }
+                } catch (MalformedURLException e) {
+                    LOG.error("Malformed URL in " + url + ":" + e.getMessage());
+                }
             }
 
         }
@@ -105,6 +174,8 @@ public class LinksIndexingFilter implements IndexingFilter {
     public void setConf(Configuration conf) {
         this.conf = conf;
         filterOutlinks = conf.getBoolean(LINKS_OUTLINKS_HOST, true);
+        filterInlinks = conf.getBoolean(LINKS_INLINKS_HOST, true);
+        indexHost = conf.getBoolean(LINKS_ONLY_HOSTS, false);
     }
 
     public Configuration getConf() {
