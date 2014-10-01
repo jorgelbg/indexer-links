@@ -37,24 +37,33 @@ import java.util.*;
 /**
  * An {@link org.apache.nutch.indexer.IndexingFilter} that adds
  * <code>outlinks</code> and <code>inlinks</code> field(s) to the document.
- * <p/>
+ * </p>
  * This plugins ignores the outlinks that goes to the same host as the URL being indexed. Nevertheless
  * a configuration option to bypass this assumption is available, just add this to your nutch-site.xml
- * <p/>
+ * </p>
  * <property>
  * <name>outlinks.host.ignore</name>
  * <value>false</value>
  * </property>
  * <p/>
- * The same checks are done for inlinks, and the same assumption is done, only add those inlinks which
+ *
+ * The same checks are done for inlinks, with the same assumption is done, only add those inlinks which
  * host portion is different than the host of the URL.
- * <p/>
+ * </p>
  * <property>
  * <name>inlinks.host.ignore</name>
  * <value>false</value>
  * </property>
  *
- * @author Jorge Luis Betancourt González <betancourt.jorge@gmail.com>
+ * Also it's possible to store only the host portion of each inlink URL or outlink URL. To accomplish this
+ * add the following to your configuration file.
+ * </p>
+ * <property>
+ * <name>links.hosts.only</name>
+ * <value>false</value>
+ * </property>
+ *
+ * @author Jorge Luis Betancourt Gonz&aacute;lez <betancourt.jorge@gmail.com>
  */
 public class LinksIndexingFilter implements IndexingFilter {
 
@@ -79,7 +88,7 @@ public class LinksIndexingFilter implements IndexingFilter {
 
         if (indexHost) {
             Set<Outlink> set = new HashSet<Outlink>();
-            // This workaround is needed as the Set class is unable of differentiate Outlink objects
+            // This workaround is needed because the Set class is unable of differentiating Outlink objects
             Set<String> hosts = new TreeSet<String>();
 
             for (Outlink outlink : outlinks) {
@@ -100,9 +109,10 @@ public class LinksIndexingFilter implements IndexingFilter {
 
         try {
             if (outlinks != null) {
+                String host = new URL(url.toString()).getHost();
+
                 for (Outlink outlink : outlinks) {
                     if (filterOutlinks) {
-                        String host = new URL(url.toString()).getHost();
                         String outHost = outlink.getToUrl();
 
                         if (!indexHost) {
@@ -120,7 +130,7 @@ public class LinksIndexingFilter implements IndexingFilter {
         } catch (MalformedURLException ex) {
             LOG.error("Malformed URL in " + url + ": " + ex.getMessage());
         }
-        
+
         // Add the inlinks, that comes from the reduce portion of the
         // indexing filter
         if (null != inlinks) {
@@ -175,6 +185,7 @@ public class LinksIndexingFilter implements IndexingFilter {
         this.conf = conf;
         filterOutlinks = conf.getBoolean(LINKS_OUTLINKS_HOST, true);
         filterInlinks = conf.getBoolean(LINKS_INLINKS_HOST, true);
+
         indexHost = conf.getBoolean(LINKS_ONLY_HOSTS, false);
     }
 

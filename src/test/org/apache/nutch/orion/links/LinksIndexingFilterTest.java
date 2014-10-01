@@ -41,9 +41,9 @@ public class LinksIndexingFilterTest extends TestCase {
         outlinks[0] = new Outlink("http://www.test.com", "test");
         outlinks[1] = new Outlink("http://www.example.com", "example");
 
-        if (true == parts) {
+        if (parts) {
             outlinks[0] = new Outlink(outlinks[0].getToUrl() + "/index.php?param=1", "test");
-            outlinks[1] = new Outlink(outlinks[1].getToUrl() + "/index.php?param=2", "test");
+            outlinks[1] = new Outlink(outlinks[1].getToUrl( ) + "/index.php?param=2", "test");
         }
 
         return outlinks;
@@ -124,7 +124,6 @@ public class LinksIndexingFilterTest extends TestCase {
 
         NutchField docOutlinks = doc.getField("outlinks");
 
-
         assertEquals("Only the host portion of the outlink URL must be indexed",
                 new URL("http://www.test.com").getHost(), docOutlinks.getValues().get(0));
 
@@ -135,5 +134,23 @@ public class LinksIndexingFilterTest extends TestCase {
 
         assertEquals("Only the host portion of the inlinks URL must be indexed",
                 new URL("http://www.test.com").getHost(), doc.getFieldValue("inlinks"));
+    }
+
+    public void testIndexHostsOnlyAndFilterOutlinks() throws Exception {
+        conf = NutchConfiguration.create();
+        conf.set(LinksIndexingFilter.LINKS_ONLY_HOSTS, "true");
+        conf.set(LinksIndexingFilter.LINKS_OUTLINKS_HOST, "true");
+
+        Outlink[] outlinks = generateOutlinks(true);
+
+        filter.setConf(conf);
+
+        NutchDocument doc = filter.filter(new NutchDocument(), new ParseImpl("text", new ParseData(
+                new ParseStatus(), "title", outlinks, metadata)), new Text(
+                "http://www.example.com/"), new CrawlDatum(), new Inlinks());
+
+        assertEquals("Index only the host portion of the outlinks after filtering the outlinks",
+                new URL("http://www.test.com").getHost(), doc.getFieldValue("outlinks"));
+
     }
 }
